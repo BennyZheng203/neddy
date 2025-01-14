@@ -164,7 +164,7 @@ class conesearch(_basesearch):
             "z_value1": "",
             "z_value2": "",
             "z_unit": "z",
-            "ot_include": "ANY",
+            "ot_include": "Galaxies",
             "nmp_op": "ANY",
             "out_csys": "Equatorial",
             "out_equinox": "J2000.0",
@@ -179,15 +179,15 @@ class conesearch(_basesearch):
 
         url = url + "?" + urllib.parse.urlencode(params)
         if not self.unclassified:
-            url = url + "&" + urllib.parse.urlencode({"ot_include": "ANY"})
+            url = url + "&" + urllib.parse.urlencode({"ot_include": "Galaxies"})
             in_objtypes1 = ["Galaxies", "GPairs", "GTriples", "GGroups",
-                            "GClusters", "QSO", "QSOGroups", "GravLens", "AbsLineSys", "EmissnLine"]
+                            "GClusters", "QSO", "QSOGroups", "GravLens", "AbsLineSys", "EmissnLine", 'GClstr', 'GGroup', 'GPair', 'GTrpl']
             for o in in_objtypes1:
                 url = url + "&" + urllib.parse.urlencode({"in_objtypes1": o})
             in_objtypes3 = ["Supernovae", "HIIregion", "PN", "SNR", "StarAssoc", "StarClust", "MolCloud", "Nova", "VarStar", "WolfRayet",
                             "CarbonStar", "PofG", "Other", "Star", "BlueStar", "RedStar", "Pulsar", "ReflNeb", "DblStar", "EmissnObj", "EmissnNeb", "WhiteDwarf"]
             for o in in_objtypes3:
-                url = url + "&" + urllib.parse.urlencode({"in_objtypes3": o})
+               url = url + "&" + urllib.parse.urlencode({"in_objtypes3": o})
 
         self.log.debug('completed the ``_get_ned_query_url`` method')
         return url

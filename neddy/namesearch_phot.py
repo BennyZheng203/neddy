@@ -16,7 +16,7 @@ standard_library.install_aliases()
 
 class namesearch(_basesearch):
     """
-    *Perform a NED name-search and return the metadata for the matched sources*
+    *Perform a NED name-search and return the SED/Photometry data for a named source*
 
     **Key Arguments**
 
@@ -30,8 +30,8 @@ class namesearch(_basesearch):
     **Usage**
 
     ```python
-    from neddy import namesearch
-    search = namesearch(
+    from neddy import namesearch_phot
+    search = namesearch_phot(
         log=log,
         names=objectName,
         verbose=True,
@@ -103,22 +103,23 @@ class namesearch(_basesearch):
         import urllib.parse
         from fundamentals.download import multiobject_download
 
-        baseUrl = "https://ned.ipac.caltech.edu/cgi-bin/"
+        baseUrl = "http://nedwww.ipac.caltech.edu/cgi-bin/nph-datasearch?search_type=Photometry&of=xml_main&objname="
         command = "gmd"
-        urlParameters = {
-            "delimiter": "bar",
-            "NO_LINKS": "1",
-            "nondb": ["row_count", "user_name_msg", "user_objname"],
-            "crosid": "objname",
-            "enotes": "objnote",
-            "position": ["ra,dec", "bhextin", "pretype", "z", "zunc", "zflag"],
-            "gadata": ["magnit", "sizemaj", "sizemin", "morphol"],
-            "attdat_CON": ["M", "S", "H", "R", "z"],
-            "distance_CON": ["mm", "dmpc"],
-            "attdat": "attned"
-        }
+        # urlParameters = {
+        #     "delimiter": "bar",
+        #     "NO_LINKS": "1",
+        #     "nondb": ["row_count", "user_name_msg", "user_objname"],
+        #     "crosid": "objname",
+        #     "enotes": "objnote",
+        #     "position": ["ra,dec", "bhextin", "pretype", "z", "zunc", "zflag"],
+        #     "gadata": ["magnit", "sizemaj", "sizemin", "morphol"],
+        #     "attdat_CON": ["M", "S", "H", "R", "z"],
+        #     "distance_CON": ["mm", "dmpc"],
+        #     "attdat": "attned"
+        # }
 
-        queryBase = "%(baseUrl)s%(command)s?uplist=" % locals()
+        #queryBase = "%(baseUrl)s%(command)s?uplist=" % locals()
+        queryBase = baseUrl
         queryList = []
 
         # BUILD THE LIST OF QUERIES
@@ -130,14 +131,6 @@ class namesearch(_basesearch):
                 queryUrl = queryUrl + urllib.parse.quote(thisName)
                 if thisIndex < thisLength - 1:
                     queryUrl = queryUrl + "%0D"
-            # ADD PARAMETERS
-            for k, v in list(urlParameters.items()):
-                if isinstance(v, list):
-                    for item in v:
-                        queryUrl = queryUrl + "&" + \
-                            k + "=" + urllib.parse.quote(item)
-                else:
-                    queryUrl = queryUrl + "&" + k + "=" + urllib.parse.quote(v)
             queryList.append(queryUrl)
 
         # PULL THE RESULT PAGES FROM NED
