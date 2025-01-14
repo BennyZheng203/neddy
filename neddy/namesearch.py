@@ -8,8 +8,12 @@
 """
 from __future__ import print_function
 from neddy import _basesearch
+import urllib
 import os
 import sys
+from astropy.io.votable import parse_single_table
+from io import BytesIO
+import pandas as pd
 from future import standard_library
 standard_library.install_aliases()
 
@@ -45,11 +49,12 @@ class namesearch(_basesearch):
     def __init__(
             self,
             log,
-            names,
+            names=False,
             quiet=False,
             verbose=False,
             searchParams=False,
-            outputFilePath=False
+            outputFilePath=False,
+            SED=False
     ):
         self.log = log
         log.debug("instantiating a new 'namesearch' object")
@@ -58,6 +63,9 @@ class namesearch(_basesearch):
         self.verbose = verbose
         self.searchParams = searchParams
         self.outputFilePath = outputFilePath
+        self.SED = SED
+
+        self.greenband = 530*10**12
 
         # CREATE A LIST IF SINGLE NAME GIVEN
         os.environ['TERM'] = 'vt100'
@@ -85,9 +93,15 @@ class namesearch(_basesearch):
         )
 
         # PERFORM NAME QUERIES AGAINST NED
-        self._build_api_url_and_download_results()
-        self.results, self.headers = self._parse_the_ned_list_results()
-        self._output_results()
+        if not self.SED:
+            self._build_api_url_and_download_results()
+            self.results, self.headers = self._parse_the_ned_list_results()
+            self._output_results()
+        else:
+            '''SED query which returns a colour map of the objects wrt to the photometry max flux in visual spectral region'''
+            colour_map = self.download_sed_query(self.names)
+            self.log.debug('complted the ``get`` method')
+            return colour_map
 
         self.log.debug('completed the ``get`` method')
         return self.results
@@ -193,3 +207,48 @@ class namesearch(_basesearch):
 
         self.log.debug('completed the ``_output_results`` method')
         return None
+    
+    def build_sed_query_url(self, names):
+        base_url = "https://vo.ned.ipac.caltech.edu/services/accessSED?REQUEST=getData&TARGETNAME="
+        return [base_url + urllib.parse.quote(name) for name in names]
+    
+    def download_sed_query(self, names):
+        urls = self.build_sed_query_url(names)
+        print(urls)
+        import urllib.parse
+        from fundamentals.download import multiobject_download
+        self.theseBatches_sed, self.theseBatchParams_sed = self._split_incoming_queries_into_batches(
+            sources=urls,
+            searchParams=self.searchParams
+        )
+        flat_url_list = [url for batch in self.theseBatches_sed for url in batch]
+
+        sed_files = multiobject_download(
+            urlList=flat_url_list,
+            downloadDirectory='/tmp',
+            log=self.log,
+            timeStamp=True,
+            timeout=3600,
+            concurrentDownloads=10,
+            resetFilename=False,
+            credentials=False,
+            longTime=True
+        )
+
+        colour_map = {}
+
+        for name, file in zip(names, sed_files):
+            for file in sed_files:
+                with open(file, 'rb') as f:
+                    try:
+                        votable = parse_single_table(BytesIO(f.read()))
+                        data = votable.to_table()
+                        df = data.to_pandas()
+                        df = df[(df['DataSpectralValue'] > 430 * 10**12) & (df['DataSpectralValue'] < 800 * 10**12)]
+                        if df.nlargest(1, 'DataFluxValue')['DataFluxValue'].values[0] >= self.greenband:
+                            colour_map[name] = 'True'
+                        else:
+                            colour_map[name]= 'False'
+                    except Exception as e:
+                        print(f"Failed to parse SED data from {file}: {e}")
+        return colour_map
