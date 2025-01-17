@@ -181,7 +181,7 @@ class conesearch(_basesearch):
         if not self.unclassified:
             url = url + "&" + urllib.parse.urlencode({"ot_include": "G"})
             in_objtypes1 = ["Galaxies", "GPairs", "GTriples", "GGroups",
-                            "GClusters", "QSO", "QSOGroups", "GravLens", "AbsLineSys", "EmissnLine", 'GClstr', 'GGroup', 'GPair', 'GTrpl', 'G']
+                            "GClusters", "QSO", "QSOGroups", "GravLens", "AbsLineSys", "EmissnLine", 'GClstr', 'GGroup', 'GPair', 'GTrpl']
             for o in in_objtypes1:
                 url = url + "&" + urllib.parse.urlencode({"in_objtypes1": o})
         #     in_objtypes3 = ["Supernovae", "HIIregion", "PN", "SNR", "StarAssoc", "StarClust", "MolCloud", "Nova", "VarStar", "WolfRayet",
@@ -190,6 +190,7 @@ class conesearch(_basesearch):
         #        url = url + "&" + urllib.parse.urlencode({"in_objtypes3": o})
 
         self.log.debug('completed the ``_get_ned_query_url`` method')
+  
         return url
 
     def get_crossmatch_names(
@@ -217,7 +218,6 @@ class conesearch(_basesearch):
             listOfCoordinates = self.listOfCoordinates
         if radiusArcsec == False:
             radiusArcsec = self.arcsec
-
         names = []
         searchParams = []
         nedUrls = []

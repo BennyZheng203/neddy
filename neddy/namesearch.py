@@ -16,7 +16,10 @@ from io import BytesIO
 import pandas as pd
 from future import standard_library
 standard_library.install_aliases()
-
+import requests
+from io import StringIO
+import time
+import tqdm
 
 class namesearch(_basesearch):
     """
@@ -209,46 +212,133 @@ class namesearch(_basesearch):
         return None
     
     def build_sed_query_url(self, names):
-        base_url = "https://vo.ned.ipac.caltech.edu/services/accessSED?REQUEST=getData&TARGETNAME="
-        return [base_url + urllib.parse.quote(name) for name in names]
-    
-    def download_sed_query(self, names):
-        urls = self.build_sed_query_url(names)
-        print(urls)
-        import urllib.parse
-        from fundamentals.download import multiobject_download
-        self.theseBatches_sed, self.theseBatchParams_sed = self._split_incoming_queries_into_batches(
-            sources=urls,
-            searchParams=self.searchParams
-        )
-        flat_url_list = [url for batch in self.theseBatches_sed for url in batch]
+        base_url = 'https://ned.ipac.caltech.edu/cgi-bin/datasearch?'
+        params = {
+            'search_type': 'Photometry',
+            'meas_type': 'bot',
+            'ebars_spec': 'ebars',
+            'label_spec': 'no',
+            'x_spec': 'freq',
+            'y_spec': 'Fnu_jy',
+            'xr': '-1',
+            'of': 'ascii_bar'
+        }
 
-        sed_files = multiobject_download(
-            urlList=flat_url_list,
-            downloadDirectory='/tmp',
-            log=self.log,
-            timeStamp=True,
-            timeout=3600,
-            concurrentDownloads=10,
-            resetFilename=False,
-            credentials=False,
-            longTime=True
-        )
+        return [base_url + urllib.parse.urlencode({**params, 'objname': name}) for name in names]
+    
+    def download_sed_query_1(self, names):
+        queryList = self.build_sed_query_url(names)
 
         colour_map = {}
+        # Download photometry data for each object, determine colour map and save to file. 
+        if not os.path.exists("/Users/jhzhe/dev/MPhys-Project/output_data/temp/dict.txt"):
+            f = open("/Users/jhzhe/dev/MPhys-Project/output_data/temp/dict.txt","w+")
+            f.close()
 
-        for name, file in zip(names, sed_files):
-            for file in sed_files:
-                with open(file, 'rb') as f:
+        f = open("/Users/jhzhe/dev/MPhys-Project/output_data/temp/dict.txt","r+")
+        for name, query in tqdm(zip(names, queryList), total=len(names), desc="Downloading SED data"):
+                if name in f.read():
+                    f.close()
+                    continue
+                
+                response = requests.get(query)
+                data = response.content.decode('utf-8')
+
+                df = pd.read_csv(
+                    StringIO(data),
+                    sep='|',
+                    skiprows=16,
+                    engine='python'
+                )
+
+
+                df = df[(df['Frequency'] >= 430 * 10**12) & (df['Frequency'] <= 800 * 10**12)]
+                if df.nlargest(1, 'Flux Density')['Flux Density'].values[0] <= 800*10**12 and df.nlargest(1, 'Flux Density')['Flux Density'].values[0] >= 600*10**12:
+                    colour_map[name] = '1'
+                elif df.nlargest(1, 'Flux Density')['Flux Density'].values[0] >= 530*10**12 and df.nlargest(1, 'Flux Density')['Flux Density'].values[0] <= 600*10**12:
+                    colour_map[name] = '2'
+                else:
+                    colour_map[name]= '3'
+                
+                f.seek(0)
+                f.truncate()
+                f.write(str(dict))
+                time.sleep(1) # sleep for 1 second to avoid ban
+                    
+        return colour_map
+    
+    def download_sed_query(self, names):
+        query_list = self.build_sed_query_url(names)
+
+        colour_map = {}
+        temp_file_path = "/Users/jhzhe/dev/MPhys-Project/output_data/temp/dict.txt"
+
+        # Ensure the directory exists
+        os.makedirs(os.path.dirname(temp_file_path), exist_ok=True)
+
+        try:
+            # Ensure the temp file exists
+            if not os.path.exists(temp_file_path):
+                with open(temp_file_path, "w+") as f:
+                    pass
+
+            with open(temp_file_path, "r+") as f:
+                processed_names = f.read().splitlines()
+
+                for name, query in tqdm(zip(names, query_list), total=len(names), desc="Downloading SED data"):
                     try:
-                        votable = parse_single_table(BytesIO(f.read()))
-                        data = votable.to_table()
-                        df = data.to_pandas()
-                        df = df[(df['DataSpectralValue'] > 430 * 10**12) & (df['DataSpectralValue'] < 800 * 10**12)]
-                        if df.nlargest(1, 'DataFluxValue')['DataFluxValue'].values[0] >= self.greenband:
-                            colour_map[name] = 'True'
+                        if name in processed_names:
+                            continue
+
+                        # Fetch the data
+                        response = requests.get(query, timeout=10)
+                        response.raise_for_status()  # Raise an HTTPError for bad responses
+                        data = response.content.decode('utf-8')
+
+                        # Parse the data
+                        df = pd.read_csv(
+                            StringIO(data),
+                            sep='|',
+                            skiprows=16,
+                            engine='python'
+                        )
+
+                        # Filter frequencies and determine color mapping
+                        df = df[(df['Frequency'] >= 430 * 10**12) & (df['Frequency'] <= 800 * 10**12)]
+                        
+                        if not df.empty:
+                            max_flux = df.nlargest(1, 'Flux Density')['Flux Density'].values[0]
+
+                            if 600 * 10**12 <= max_flux <= 800 * 10**12:
+                                colour_map[name] = '1'
+                            elif 530 * 10**12 <= max_flux < 600 * 10**12:
+                                colour_map[name] = '2'
+                            else:
+                                colour_map[name] = '3'
                         else:
-                            colour_map[name]= 'False'
+                            colour_map[name] = 'No Data'
+
+                        # Log the processed name
+                        f.write(name + '\n')
+                        f.flush()
+
+                    except requests.exceptions.RequestException as e:
+                        print(f"Network error for {name}: {e}")
+                        continue
+                    except pd.errors.EmptyDataError:
+                        print(f"Data parsing error for {name}: No valid data found.")
+                        colour_map[name] = 'No Data'
+                        continue
                     except Exception as e:
-                        print(f"Failed to parse SED data from {file}: {e}")
+                        print(f"Unexpected error for {name}: {e}")
+                        continue
+
+                    # Avoid overwhelming the server
+                    time.sleep(1)
+
+        except IOError as e:
+            print(f"File I/O error: {e}")
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+
         return colour_map
