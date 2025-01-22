@@ -19,7 +19,7 @@ standard_library.install_aliases()
 import requests
 from io import StringIO
 import time
-import tqdm
+from tqdm import tqdm
 
 class namesearch(_basesearch):
     """
@@ -56,8 +56,7 @@ class namesearch(_basesearch):
             quiet=False,
             verbose=False,
             searchParams=False,
-            outputFilePath=False,
-            SED=False
+            outputFilePath=False
     ):
         self.log = log
         log.debug("instantiating a new 'namesearch' object")
@@ -66,9 +65,6 @@ class namesearch(_basesearch):
         self.verbose = verbose
         self.searchParams = searchParams
         self.outputFilePath = outputFilePath
-        self.SED = SED
-
-        self.greenband = 530*10**12
 
         # CREATE A LIST IF SINGLE NAME GIVEN
         os.environ['TERM'] = 'vt100'
@@ -96,17 +92,11 @@ class namesearch(_basesearch):
         )
 
         # PERFORM NAME QUERIES AGAINST NED
-        if not self.SED:
-            self._build_api_url_and_download_results()
-            self.results, self.headers = self._parse_the_ned_list_results()
-            self._output_results()
-        else:
-            '''SED query which returns a colour map of the objects wrt to the photometry max flux in visual spectral region'''
-            colour_map = self.download_sed_query(self.names)
-            self.log.debug('complted the ``get`` method')
-            return colour_map
-
+        self._build_api_url_and_download_results()
+        self.results, self.headers = self._parse_the_ned_list_results()
+        self._output_results()
         self.log.debug('completed the ``get`` method')
+
         return self.results
 
     def _build_api_url_and_download_results(
@@ -316,14 +306,16 @@ class namesearch(_basesearch):
                             else:
                                 colour_map[name] = '3'
                         else:
-                            colour_map[name] = 'No Data'
+                            colour_map[name] = '3'
 
                         # Log the processed name
                         f.write(name + '\n')
                         f.flush()
 
                     except requests.exceptions.RequestException as e:
-                        print(f"Network error for {name}: {e}")
+                        colour_map[name] = 'No Data'
+                        print(f"Network error for {name}: {e}, no data skipping...")
+
                         continue
                     except pd.errors.EmptyDataError:
                         print(f"Data parsing error for {name}: No valid data found.")
